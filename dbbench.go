@@ -49,11 +49,12 @@ func check(e error) {
 }
 
 type SkippedQueries struct {
-	CaseId string
-	items  []string
+	CaseId   string
+	QueryIds []string
 }
 
 func (t *SkippedQueries) descend(node *yaml.Node) error {
+	found := false
 	switch node.Kind {
 	case yaml.SequenceNode:
 		for _, item := range node.Content {
@@ -64,7 +65,7 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 			key := node.Content[i]
 			value := node.Content[i+1]
 			if key.Kind != yaml.ScalarNode || key.Value != "id" {
-				log.Printf("%v", key.Value)
+				// log.Printf("%v", key.Value)
 				t.descend(value)
 				continue
 			}
@@ -73,6 +74,26 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 			}
 			if value.Value == t.CaseId {
 				log.Printf("FOUND")
+				found = true
+				break
+			}
+		}
+		if found == true {
+			for i := 0; i < len(node.Content); i += 2 {
+				key := node.Content[i]
+				value := node.Content[i+1]
+				if key.Kind != yaml.ScalarNode || key.Value != "skip_numbers" {
+					log.Printf("%v", key.Value)
+					continue
+				}
+				if value.Kind != yaml.SequenceNode {
+					return errors.New("encountered non-list task")
+				}
+				for _, item := range value.Content {
+					log.Printf("XXX FOUND %v", item.Value)
+					t.QueryIds = append(t.QueryIds, item.Value)
+				}
+
 			}
 		}
 	}
@@ -80,30 +101,30 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 }
 
 func (t *SkippedQueries) UnmarshalYAML(value *yaml.Node) error {
-	t.items = nil
+	t.QueryIds = nil
 	return t.descend(value)
 }
 
-func readConf(filename string, caseId string) error {
+func getSkippedQueries(filename string, caseId string) ([]string, error) {
 
 	var t SkippedQueries
 	t.CaseId = caseId
 
 	buf, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = yaml.Unmarshal(buf, &t)
 	if err != nil {
-		return fmt.Errorf("in file %q: %v", filename, err)
+		return nil, fmt.Errorf("in file %q: %v", filename, err)
 	}
 
-	for _, item := range t.items {
+	for _, item := range t.QueryIds {
 		fmt.Printf("%v", item)
 	}
 
-	return nil
+	return t.QueryIds, nil
 }
 
 func main() {
@@ -116,7 +137,7 @@ func main() {
 	query_path := filepath.Join(qserv_src_path, "itest_src", "datasets", caseId, "queries")
 
 	conf_file := filepath.Join(qserv_src_path, "src", "admin", "etc", "integration_tests.yaml")
-	err := readConf(conf_file, caseId)
+	skippedQueryIds, err := getSkippedQueries(conf_file, caseId)
 	//	log.Printf("yaml: %v", c)
 	check(err)
 
@@ -125,8 +146,15 @@ func main() {
 
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".sql") {
-			sqlFiles = append(sqlFiles, file)
-			// log.Printf("Appending %v\n  ", file.Name())
+			skipped := false
+			for _, skippedId := range skippedQueryIds {
+				if strings.HasPrefix(file.Name(), skippedId) {
+					skipped = true
+				}
+			}
+			if !skipped {
+				sqlFiles = append(sqlFiles, file)
+			}
 		}
 	}
 
@@ -159,9 +187,6 @@ func main() {
 		i++
 		w.Flush()
 	}
-
-	log.Println("WARNING: Remove manually queries listed in 'skip_number' section of https://github.com/lsst/qserv/blob/main/src/admin/etc/integration_tests.yaml")
-
 }
 
 func getSQL(filename string) string {
