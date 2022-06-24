@@ -30,19 +30,21 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 )
 
-type Metadata struct {
+type metadata struct {
 	Database string `json:"database"`
 	// map key is the schema file
-	Tables map[string]Table `json:"tables"`
+	Tables map[string]table `json:"tables"`
 }
 
-type Table struct {
+type table struct {
 	Indexes []string `json:"indexes"`
 	// map key is the directory
 	Data map[string]Data `json:"data"`
@@ -54,29 +56,35 @@ type Data struct {
 	Files    []string `json:"files"`
 }
 
-func NewMetadata() *Metadata {
-	var metadata Metadata
-	metadata.Tables = make(map[string]Table)
-	return &metadata
-}
-
-func NewTable() *Table {
-	var table Table
-	table.Data = make(map[string]Data)
-	return &table
-}
-
 func check(e error) {
 	if e != nil {
 		panic(e)
 	}
 }
 
+func newMetadata() *metadata {
+	var metadata metadata
+	metadata.Tables = make(map[string]table)
+	return &metadata
+}
+
+func newTable() *table {
+	var table table
+	table.Data = make(map[string]Data)
+	return &table
+}
+
+func update(data *Data, filename string) {
+	data.Files = append(data.Files, filename)
+}
+
 func main() {
+
+	fmt.Println("XXXXXXXXXXXX")
 
 	input_dir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
 
-	metadata := NewMetadata()
+	metadata := newMetadata()
 
 	visit := func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
@@ -84,28 +92,37 @@ func main() {
 		}
 		//log.Printf("file %s %d", path, info.Size())
 		if !info.IsDir() {
-			tmp := strings.TrimPrefix(path, input_dir)
-			dir, file := filepath.Split(tmp)
+			rpath := strings.TrimPrefix(path, input_dir)
+			dir, filename := filepath.Split(rpath)
 			parts := strings.SplitN(dir, "/", 2)
 
 			tablejson := parts[0]
 
-			// fmt.Println("Dir:", dir)   //Dir: /some/path/to/remove/
-			// fmt.Println("File:", file) //File: file.name
+			fmt.Println("Dir:", dir) //Dir: /some/path/to/remove/
+			// fmt.Println("File:", filename) //File: file.name
 			// fmt.Println("Table:", tablejson)
 
 			table, has_table := metadata.Tables[tablejson]
 			if !has_table {
-				table = *NewTable()
+				table = *newTable()
 				metadata.Tables[tablejson] = table
 			}
 
 			data, has_dir := table.Data[dir]
 			if !has_dir {
-				data := Data{}
-				table.Data[dir] = data
+				table.Data[dir] = Data{}
+				data, _ = table.Data[dir]
 			}
-			data.Files = append(data.Files, file)
+
+			//chunkFile := regexp.MustCompile(`\s+`)
+			// //log.Printf("data1 '%v' '%s'\n  ", data, sql)
+			// data = space.ReplaceAllString(data, " ")
+
+			// if string
+
+			update(&data, filename)
+			fmt.Printf("Data %v\n", data)
+			fmt.Printf("Data %v\n", table.Data[dir])
 		}
 		return nil
 	}
@@ -115,10 +132,9 @@ func main() {
 		log.Println(err)
 	}
 
-	u, err := json.Marshal(metadata)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(u))
-
+	var f io.Writer = os.Stdout
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	err = enc.Encode(metadata)
+	check(err)
 }
