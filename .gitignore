@@ -5,6 +5,7 @@
 *.so
 *.dylib
 /metadata
+/metadata.json
 
 # Test binary, built with `go test -c`
 *.test

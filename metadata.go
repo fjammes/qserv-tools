@@ -28,25 +28,42 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 )
 
 type Metadata struct {
 	Database string `json:"database"`
-	Tables   []struct {
-		Schema  string   `json:"schema"`
-		Indexes []string `json:"indexes"`
-		Data    []struct {
-			Directory string   `json:"directory"`
-			Chunks    []int    `json:"chunks"`
-			Overlaps  []int    `json:"overlaps"`
-			Files     []string `json:"files"`
-		} `json:"data"`
-	} `json:"tables"`
+	// map key is the schema file
+	Tables map[string]Table `json:"tables"`
+}
+
+type Table struct {
+	Indexes []string `json:"indexes"`
+	// map key is the directory
+	Data map[string]Data `json:"data"`
+}
+
+type Data struct {
+	Chunks   []int    `json:"chunks"`
+	Overlaps []int    `json:"overlaps"`
+	Files    []string `json:"files"`
+}
+
+func NewMetadata() *Metadata {
+	var metadata Metadata
+	metadata.Tables = make(map[string]Table)
+	return &metadata
+}
+
+func NewTable() *Table {
+	var table Table
+	table.Data = make(map[string]Data)
+	return &table
 }
 
 func check(e error) {
@@ -57,24 +74,51 @@ func check(e error) {
 
 func main() {
 
-	input_dir := "/sps/lsst/groups/qserv/rubin/previews/dp0.2/idf-dp0.2-catalog-chunked/PREOPS-905/"
+	input_dir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
 
-	err := filepath.Walk(input_dir,
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			//log.Printf("file %s %d", path, info.Size())
+	metadata := NewMetadata()
+
+	visit := func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		//log.Printf("file %s %d", path, info.Size())
+		if !info.IsDir() {
 			tmp := strings.TrimPrefix(path, input_dir)
 			dir, file := filepath.Split(tmp)
 			parts := strings.SplitN(dir, "/", 2)
-			fmt.Println("Dir:", dir)   //Dir: /some/path/to/remove/
-			fmt.Println("File:", file) //File: file.name
-			fmt.Println("Table:", parts[0])
-			return nil
-		})
+
+			tablejson := parts[0]
+
+			// fmt.Println("Dir:", dir)   //Dir: /some/path/to/remove/
+			// fmt.Println("File:", file) //File: file.name
+			// fmt.Println("Table:", tablejson)
+
+			table, has_table := metadata.Tables[tablejson]
+			if !has_table {
+				table = *NewTable()
+				metadata.Tables[tablejson] = table
+			}
+
+			data, has_dir := table.Data[dir]
+			if !has_dir {
+				data := Data{}
+				table.Data[dir] = data
+			}
+			data.Files = append(data.Files, file)
+		}
+		return nil
+	}
+
+	err := filepath.WalkDir(input_dir, visit)
 	if err != nil {
 		log.Println(err)
 	}
+
+	u, err := json.Marshal(metadata)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(u))
 
 }
