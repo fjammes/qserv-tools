@@ -73,7 +73,7 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 				return errors.New("encountered non-scalar task")
 			}
 			if value.Value == t.CaseId {
-				log.Printf("FOUND")
+				// log.Printf("FOUND")
 				found = true
 				break
 			}
@@ -83,14 +83,14 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 				key := node.Content[i]
 				value := node.Content[i+1]
 				if key.Kind != yaml.ScalarNode || key.Value != "skip_numbers" {
-					log.Printf("%v", key.Value)
+					// log.Printf("%v", key.Value)
 					continue
 				}
 				if value.Kind != yaml.SequenceNode {
 					return errors.New("encountered non-list task")
 				}
 				for _, item := range value.Content {
-					log.Printf("XXX FOUND %v", item.Value)
+					// log.Printf("XXX FOUND %v", item.Value)
 					t.QueryIds = append(t.QueryIds, item.Value)
 				}
 
@@ -136,9 +136,10 @@ func main() {
 
 	query_path := filepath.Join(qserv_src_path, "itest_src", "datasets", caseId, "queries")
 
+	log.Printf("Use input queries  path %v", query_path)
+
 	conf_file := filepath.Join(qserv_src_path, "src", "admin", "etc", "integration_tests.yaml")
 	skippedQueryIds, err := getSkippedQueries(conf_file, caseId)
-	//	log.Printf("yaml: %v", c)
 	check(err)
 
 	files, err := ioutil.ReadDir(query_path)
@@ -158,7 +159,9 @@ func main() {
 		}
 	}
 
-	f, err := os.Create("/tmp/dbbench.ini")
+	dbbench_conf := "/tmp/dbbench.ini"
+	log.Printf("Generate %v", dbbench_conf)
+	f, err := os.Create(dbbench_conf)
 	check(err)
 
 	defer f.Close()
