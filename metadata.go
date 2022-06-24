@@ -35,6 +35,20 @@ import (
 	"strings"
 )
 
+type Metadata struct {
+	Database string `json:"database"`
+	Tables   []struct {
+		Schema  string   `json:"schema"`
+		Indexes []string `json:"indexes"`
+		Data    []struct {
+			Directory string   `json:"directory"`
+			Chunks    []int    `json:"chunks"`
+			Overlaps  []int    `json:"overlaps"`
+			Files     []string `json:"files"`
+		} `json:"data"`
+	} `json:"tables"`
+}
+
 func check(e error) {
 	if e != nil {
 		panic(e)
