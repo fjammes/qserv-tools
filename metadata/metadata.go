@@ -41,16 +41,16 @@ import (
 type metadata struct {
 	Database string `json:"database"`
 	// map key is the schema file
-	Tables map[string]table `json:"tables"`
+	Tables map[string]*table `json:"tables"`
 }
 
 type table struct {
 	Indexes []string `json:"indexes"`
 	// map key is the directory
-	DataList map[string]Data `json:"data"`
+	DataList map[string]*data `json:"data"`
 }
 
-type Data struct {
+type data struct {
 	Chunks   []int    `json:"chunks"`
 	Overlaps []int    `json:"overlaps"`
 	Files    []string `json:"files"`
@@ -64,17 +64,17 @@ func check(e error) {
 
 func newMetadata() *metadata {
 	var metadata metadata
-	metadata.Tables = make(map[string]table)
+	metadata.Tables = make(map[string]*table)
 	return &metadata
 }
 
 func newTable() *table {
 	var table table
-	table.DataList = make(map[string]Data)
+	table.DataList = make(map[string]*data)
 	return &table
 }
 
-func update(data *Data, filename string) {
+func update(data *data, filename string) {
 	data.Files = append(data.Files, filename)
 }
 
@@ -102,20 +102,28 @@ func Cmd() {
 			// fmt.Println("File:", filename) //File: file.name
 			// fmt.Println("Table:", tablejson)
 
-			table := metadata.Tables[tablejson]
-			if table.DataList == nil {
-				table.DataList = make(map[string]Data)
+			t := metadata.Tables[tablejson]
+			if t == nil {
+				t = &table{}
+			}
+			if t.DataList == nil {
+				t.DataList = make(map[string]*data)
 			}
 
-			data := table.DataList[dir]
-			data.Files = append(data.Files, filename)
+			d := t.DataList[dir]
+			if d == nil {
+				d = &data{}
+			}
+			if len(d.Files) == 0 {
+				d.Files = make([]string, 0, 20)
+			}
+			d.Files = append(d.Files, filename)
 
-			table.DataList[dir] = data
-
-			metadata.Tables[tablejson] = table
+			t.DataList[dir] = d
+			metadata.Tables[tablejson] = t
 
 			//chunkFile := regexp.MustCompile(`\s+`)
-			// //log.Printf("data1 '%v' '%s'\n  ", data, sql)
+			//log.Printf("data1 '%v' '%s'\n  ", data, sql)
 			// data = space.ReplaceAllString(data, " ")
 
 			// if string
