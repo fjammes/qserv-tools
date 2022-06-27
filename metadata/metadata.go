@@ -25,7 +25,7 @@
 // Exemple to run it:
 // go run itest/examples/dbbench.go && cat /tmp/dbbench.ini
 
-package main
+package metadata
 
 import (
 	"encoding/json"
@@ -47,7 +47,7 @@ type metadata struct {
 type table struct {
 	Indexes []string `json:"indexes"`
 	// map key is the directory
-	Data map[string]Data `json:"data"`
+	DataList map[string]Data `json:"data"`
 }
 
 type Data struct {
@@ -70,7 +70,7 @@ func newMetadata() *metadata {
 
 func newTable() *table {
 	var table table
-	table.Data = make(map[string]Data)
+	table.DataList = make(map[string]Data)
 	return &table
 }
 
@@ -78,7 +78,7 @@ func update(data *Data, filename string) {
 	data.Files = append(data.Files, filename)
 }
 
-func main() {
+func Cmd() {
 
 	fmt.Println("XXXXXXXXXXXX")
 
@@ -98,31 +98,29 @@ func main() {
 
 			tablejson := parts[0]
 
-			fmt.Println("Dir:", dir) //Dir: /some/path/to/remove/
+			// fmt.Println("Dir:", dir) //Dir: /some/path/to/remove/
 			// fmt.Println("File:", filename) //File: file.name
 			// fmt.Println("Table:", tablejson)
 
-			table, has_table := metadata.Tables[tablejson]
-			if !has_table {
-				table = *newTable()
-				metadata.Tables[tablejson] = table
+			table := metadata.Tables[tablejson]
+			if table.DataList == nil {
+				table.DataList = make(map[string]Data)
 			}
 
-			data, has_dir := table.Data[dir]
-			if !has_dir {
-				table.Data[dir] = Data{}
-				data, _ = table.Data[dir]
-			}
+			data := table.DataList[dir]
+			data.Files = append(data.Files, filename)
+
+			table.DataList[dir] = data
+
+			metadata.Tables[tablejson] = table
 
 			//chunkFile := regexp.MustCompile(`\s+`)
 			// //log.Printf("data1 '%v' '%s'\n  ", data, sql)
 			// data = space.ReplaceAllString(data, " ")
 
 			// if string
-
-			update(&data, filename)
-			fmt.Printf("Data %v\n", data)
-			fmt.Printf("Data %v\n", table.Data[dir])
+			//fmt.Printf("Data %v\n", data)
+			//fmt.Printf("Data %v\n", table.DataList[dir])
 		}
 		return nil
 	}
