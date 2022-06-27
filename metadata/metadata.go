@@ -138,13 +138,11 @@ func appendMetadata(metadata *metadata, table string, directory string, filename
 	case Overlap:
 		d.Overlaps = append(d.Overlaps, chunkId)
 	case Csv:
-		d.Overlaps = append(d.Overlaps, chunkId)
+		d.Files = append(d.Files, filename)
 	default:
 		log.Println("not recognized")
 		err = fmt.Errorf("not recognized file %s", filename)
 	}
-
-	d.Files = append(d.Files, filename)
 
 	t.DataList[directory] = d
 	metadata.Tables[table] = t
