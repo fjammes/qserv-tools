@@ -35,19 +35,31 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+)
+
+type Filetype int64
+
+const (
+	Csv Filetype = iota
+	Chunk
+	Json
+	Overlap
+	Unknown
 )
 
 type metadata struct {
 	Database string `json:"database"`
 	// map key is the schema file
-	Tables map[string]*table `json:"tables"`
+	Tables map[string]table `json:"tables"`
 }
 
 type table struct {
 	Indexes []string `json:"indexes"`
 	// map key is the directory
-	DataList map[string]*data `json:"data"`
+	DataList map[string]data `json:"data"`
 }
 
 type data struct {
@@ -64,13 +76,13 @@ func check(e error) {
 
 func newMetadata() *metadata {
 	var metadata metadata
-	metadata.Tables = make(map[string]*table)
+	metadata.Tables = make(map[string]table)
 	return &metadata
 }
 
 func newTable() *table {
 	var table table
-	table.DataList = make(map[string]*data)
+	table.DataList = make(map[string]data)
 	return &table
 }
 
@@ -78,9 +90,71 @@ func update(data *data, filename string) {
 	data.Files = append(data.Files, filename)
 }
 
-func Cmd() {
+func filetype(filename string) (Filetype, int, error) {
 
-	fmt.Println("XXXXXXXXXXXX")
+	overlap := regexp.MustCompile(`^chunk_[0-9]+_overlap.txt$`)
+	chunk := regexp.MustCompile(`^chunk_[0-9]+.txt$`)
+	integer := regexp.MustCompile(`[0-9]+`)
+	var ftype Filetype
+	chunkId := -1
+	var err error
+	switch {
+	case overlap.MatchString(filename):
+		ftype = Overlap
+		chunkId, err = strconv.Atoi(integer.FindString(filename))
+	case chunk.MatchString(filename):
+		ftype = Chunk
+		chunkId, err = strconv.Atoi(integer.FindString(filename))
+	case filepath.Ext(filename) == ".csv":
+		ftype = Csv
+	case filepath.Ext(filename) == ".json":
+		ftype = Json
+	default:
+		log.Println("not recognized")
+		ftype = Unknown
+		err = fmt.Errorf("not recognized file %s", filename)
+	}
+	return ftype, chunkId, err
+}
+
+func appendMetadata(metadata *metadata, table string, directory string, filename string, filetype Filetype, chunkId int) error {
+
+	var err error
+	t := metadata.Tables[table]
+
+	if t.DataList == nil {
+		t.DataList = make(map[string]data)
+	}
+
+	d := t.DataList[directory]
+
+	if len(d.Files) == 0 {
+		d.Files = make([]string, 0, 20)
+	}
+
+	switch filetype {
+	case Chunk:
+		d.Chunks = append(d.Chunks, chunkId)
+	case Overlap:
+		d.Overlaps = append(d.Overlaps, chunkId)
+	case Csv:
+		d.Overlaps = append(d.Overlaps, chunkId)
+	default:
+		log.Println("not recognized")
+		err = fmt.Errorf("not recognized file %s", filename)
+	}
+
+	d.Files = append(d.Files, filename)
+
+	t.DataList[directory] = d
+	metadata.Tables[table] = t
+
+	t.DataList[directory] = d
+	metadata.Tables[table] = t
+	return err
+}
+
+func Cmd() {
 
 	input_dir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
 
@@ -102,33 +176,16 @@ func Cmd() {
 			// fmt.Println("File:", filename) //File: file.name
 			// fmt.Println("Table:", tablejson)
 
-			t := metadata.Tables[tablejson]
-			if t == nil {
-				t = &table{}
-			}
-			if t.DataList == nil {
-				t.DataList = make(map[string]*data)
+			ftype, chunkId, err := filetype(filename)
+			if err != nil {
+				return err
 			}
 
-			d := t.DataList[dir]
-			if d == nil {
-				d = &data{}
+			err = appendMetadata(metadata, tablejson, dir, filename, ftype, chunkId)
+			if err != nil {
+				return err
 			}
-			if len(d.Files) == 0 {
-				d.Files = make([]string, 0, 20)
-			}
-			d.Files = append(d.Files, filename)
 
-			t.DataList[dir] = d
-			metadata.Tables[tablejson] = t
-
-			//chunkFile := regexp.MustCompile(`\s+`)
-			//log.Printf("data1 '%v' '%s'\n  ", data, sql)
-			// data = space.ReplaceAllString(data, " ")
-
-			// if string
-			//fmt.Printf("Data %v\n", data)
-			//fmt.Printf("Data %v\n", table.DataList[dir])
 		}
 		return nil
 	}
