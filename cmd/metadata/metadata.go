@@ -27,10 +27,18 @@
 
 package main
 
-import "fjammes/qserv_tools/v2/metadata"
+import (
+	"fjammes/qserv_tools/v2/metadata"
+	"flag"
+)
 
 func main() {
 
-	metadata.Cmd()
+	defaultInputDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
+	inputDir := flag.String("path", defaultInputDir, "Path to input data")
+
+	flag.Parse()
+
+	metadata.Cmd(*inputDir)
 
 }

@@ -47,6 +47,7 @@ const (
 	Chunk
 	Json
 	Overlap
+	Tsv
 	Unknown
 )
 
@@ -63,9 +64,9 @@ type table struct {
 }
 
 type data struct {
-	Chunks   []int    `json:"chunks"`
-	Overlaps []int    `json:"overlaps"`
-	Files    []string `json:"files"`
+	Chunks   []int    `json:"chunks,omitempty"`
+	Overlaps []int    `json:"overlaps,omitempty"`
+	Files    []string `json:"files,omitempty"`
 }
 
 func check(e error) {
@@ -84,6 +85,18 @@ func newTable() *table {
 	var table table
 	table.DataList = make(map[string]data)
 	return &table
+}
+
+func isDataFile(category Filetype) bool {
+	switch category {
+	case
+		Csv,
+		Chunk,
+		Overlap,
+		Tsv:
+		return true
+	}
+	return false
 }
 
 func update(data *data, filename string) {
@@ -109,10 +122,12 @@ func filetype(filename string) (Filetype, int, error) {
 		ftype = Csv
 	case filepath.Ext(filename) == ".json":
 		ftype = Json
+	case filepath.Ext(filename) == ".tsv":
+		ftype = Tsv
 	default:
 		log.Println("not recognized")
 		ftype = Unknown
-		err = fmt.Errorf("not recognized file %s", filename)
+
 	}
 	return ftype, chunkId, err
 }
@@ -139,9 +154,11 @@ func appendMetadata(metadata *metadata, table string, directory string, filename
 		d.Overlaps = append(d.Overlaps, chunkId)
 	case Csv:
 		d.Files = append(d.Files, filename)
+	case Tsv:
+		d.Files = append(d.Files, filename)
 	default:
 		log.Println("not recognized")
-		err = fmt.Errorf("not recognized file %s", filename)
+		err = fmt.Errorf("Not recognized file %s", filepath.Join(directory, filename))
 	}
 
 	t.DataList[directory] = d
@@ -152,9 +169,7 @@ func appendMetadata(metadata *metadata, table string, directory string, filename
 	return err
 }
 
-func Cmd() {
-
-	input_dir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
+func Cmd(inputDir string) {
 
 	metadata := newMetadata()
 
@@ -162,15 +177,15 @@ func Cmd() {
 		if err != nil {
 			return err
 		}
-		//log.Printf("file %s %d", path, info.Size())
+		// log.Printf("file %s", path)
 		if !info.IsDir() {
-			rpath := strings.TrimPrefix(path, input_dir)
+			rpath := strings.TrimPrefix(path, inputDir)
 			dir, filename := filepath.Split(rpath)
 			parts := strings.SplitN(dir, "/", 2)
 
 			tablejson := parts[0]
 
-			// fmt.Println("Dir:", dir) //Dir: /some/path/to/remove/
+			// fmt.Println("Dir:", dir)       //Dir: /some/path/to/remove/
 			// fmt.Println("File:", filename) //File: file.name
 			// fmt.Println("Table:", tablejson)
 
@@ -178,19 +193,24 @@ func Cmd() {
 			if err != nil {
 				return err
 			}
-
-			err = appendMetadata(metadata, tablejson, dir, filename, ftype, chunkId)
-			if err != nil {
+			if ftype == Unknown {
+				err = fmt.Errorf("Not recognized file %s", filepath.Join(dir, filename))
 				return err
+			}
+			if isDataFile(ftype) {
+				err = appendMetadata(metadata, tablejson, dir, filename, ftype, chunkId)
+				if err != nil {
+					return err
+				}
 			}
 
 		}
 		return nil
 	}
 
-	err := filepath.WalkDir(input_dir, visit)
+	err := filepath.WalkDir(inputDir, visit)
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 
 	var f io.Writer = os.Stdout
