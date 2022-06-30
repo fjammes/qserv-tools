@@ -39,8 +39,11 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	defaultInputDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
+	defaultIdxDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905/in2p3/config"
+	defaultOutputFile := "/tmp/metadata.json"
 	inputDir := flag.String("path", defaultInputDir, "Path to input data")
-
+	outFile := flag.String("out", defaultOutputFile, "Path to output file")
+	idxDir := flag.String("idx", defaultIdxDir, "Path to indexes configuration files")
 	flag.Parse()
 
 	// Default level for this example is info, unless debug flag is present
@@ -49,6 +52,11 @@ func main() {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	metadata.Cmd(*inputDir)
+	cfg := metadata.Config{
+		DbJsonFile:    "dp02_dc2_catalogs.json",
+		OrderedTables: []string{},
+		IdxDir:        *idxDir,
+	}
 
+	metadata.Cmd(*inputDir, *outFile, cfg)
 }
