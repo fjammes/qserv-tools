@@ -39,7 +39,7 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	debug := flag.Bool("debug", false, "sets log level to debug")
 	defaultInputDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
-	defaultIdxDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905/in2p3/config"
+	defaultIdxDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905/in2p3/config_indexes"
 	defaultOutputFile := "/tmp/metadata.json"
 	inputDir := flag.String("path", defaultInputDir, "Path to input data")
 	outFile := flag.String("out", defaultOutputFile, "Path to output file")

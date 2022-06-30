@@ -108,7 +108,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 			parts := strings.SplitN(dir, "/", 2)
 			tablename := parts[0]
 
-			log.Debug().Str("CWD", dir).Msg("")
+			log.Debug().Str("Directory", dir).Msg("")
 			log.Debug().Str("File", filename).Msg("")
 			log.Debug().Str("Table", tablename).Msg("")
 
@@ -134,7 +134,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 	if err != nil {
 		log.Fatal().AnErr("WalkDir", err).Msg("Error while scanning path")
 	}
-	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	// zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	visitIdx := func(path string, info fs.DirEntry, err error) error {
 
 		if err != nil {
@@ -153,7 +153,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 			}
 			if ftype == Json {
 				for tablename, tableSpec := range tables {
-					log.Debug().Str("TableName", tablename).Str("TableSpec", fmt.Sprintf("%v", tableSpec)).Msg("")
+					// log.Trace().Str("TableName", tablename).Str("TableSpec", fmt.Sprintf("%v", tableSpec)).Msg("")
 					re := regexp.MustCompile(fmt.Sprintf("^idx_%s.*\\.json$", tablename))
 					if re.MatchString(filename) {
 						log.Debug().Str("IndexFile", filename).Str("Regexp", re.String()).Msg("Recognized index file")
