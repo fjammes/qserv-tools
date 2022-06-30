@@ -90,11 +90,8 @@ func logTable(tables map[string]table) {
 }
 
 func walkDirs(inputDir string, cfg Config) map[string]table {
-	// Ensure inputDir has only one trailing slash
-	for inputDir[len(inputDir)-1] == '/' {
-		inputDir = strings.TrimSuffix(inputDir, "/")
-	}
-	inputDir += "/"
+	// Ensure inputDir has no trailing slash
+	inputDir = filepath.Join(inputDir)
 
 	tables := make(map[string]table)
 
@@ -105,6 +102,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 		}
 		if !info.IsDir() {
 			rpath := strings.TrimPrefix(path, inputDir)
+			rpath = strings.TrimPrefix(rpath, "/")
 			dir, filename := filepath.Split(rpath)
 
 			parts := strings.SplitN(dir, "/", 2)
