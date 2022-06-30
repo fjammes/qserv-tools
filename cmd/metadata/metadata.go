@@ -30,14 +30,24 @@ package main
 import (
 	"fjammes/qserv_tools/v2/metadata"
 	"flag"
+
+	"github.com/rs/zerolog"
 )
 
 func main() {
 
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	debug := flag.Bool("debug", false, "sets log level to debug")
 	defaultInputDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
 	inputDir := flag.String("path", defaultInputDir, "Path to input data")
 
 	flag.Parse()
+
+	// Default level for this example is info, unless debug flag is present
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if *debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
 
 	metadata.Cmd(*inputDir)
 
