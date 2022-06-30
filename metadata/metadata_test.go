@@ -101,3 +101,37 @@ func TestWalkDirs(t *testing.T) {
 	assert.Equal(t, idx, tables["sdqa_Metric"].Indexes, "The two index lists should be the same.")
 	assert.Equal(t, []string(nil), tables["LeapSeconds"].Indexes, "The two index lists should be the same.")
 }
+
+// TestWalkDirs check return values for metadata.convert()
+func TestConvert(t *testing.T) {
+
+	tables := make(map[string]table)
+	dataList := make(map[string]data)
+
+	dataList["chunkdatadir"] = data{
+		Chunks:   []int{11111, 22222, 33333},
+		Overlaps: []int{11111, 22222, 33333},
+		Files:    nil,
+	}
+
+	tables["RubinTable"] = table{
+		Schema:   "RubinTable.json",
+		Indexes:  []string(nil),
+		DataList: dataList,
+	}
+
+	var metadata metadata
+
+	convert(&metadata, tables)
+
+	assert.Equal(t, []int(nil), metadata.Tables[0].DataList["chunkdatadir"].Overlaps, "Overlap should be empty")
+
+	dataList["chunkdatadir2"] = data{
+		Chunks:   []int(nil),
+		Overlaps: []int(nil),
+		Files:    []string{"data.csv"},
+	}
+
+	// TODO check it fails
+	// convert(&metadata, tables)
+}

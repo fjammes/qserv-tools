@@ -96,7 +96,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 	tables := make(map[string]table)
 
 	// zerolog.SetGlobalLevel(zerolog.Disabled)
-	log.Info().Str("inputDir", cfg.IdxDir).Msg("Add data files")
+	log.Info().Str("Path", inputDir).Msg("Add data files")
 	visitData := func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -185,12 +185,7 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 	return tables
 }
 
-func newMetadata(inputDir string, cfg Config) *metadata {
-	var metadata metadata
-	metadata.Database = cfg.DbJsonFile
-
-	tables := walkDirs(inputDir, cfg)
-
+func convert(metadata *metadata, tables map[string]table) {
 	metadata.Tables = make([]table, 0, len(tables))
 	for tableName, tableSpec := range tables {
 		var is_partitioned, is_regular bool
@@ -204,6 +199,7 @@ func newMetadata(inputDir string, cfg Config) *metadata {
 			}
 			// Remove Overlap list if equals Chunk list
 			if len(dataSpec.Chunks) != 0 && slices.Equal(dataSpec.Chunks, dataSpec.Overlaps) {
+				log.Info().Str("Table", tableName).Str("Path", dir).Msg("Remove Overlaps")
 				dataSpec.Overlaps = []int(nil)
 			}
 			tableSpec.DataList[dir] = dataSpec
@@ -211,10 +207,16 @@ func newMetadata(inputDir string, cfg Config) *metadata {
 		if is_partitioned == is_regular {
 			log.Fatal().Str("Partitioned", strconv.FormatBool(is_partitioned)).Str("Regular", strconv.FormatBool(is_regular)).Str("Table", tableName).Msg("Error while checking data consistency")
 		}
-
 		metadata.Tables = append(metadata.Tables, tableSpec)
 	}
+}
 
+func newMetadata(inputDir string, cfg Config) *metadata {
+	var metadata metadata
+	metadata.Database = cfg.DbJsonFile
+
+	tables := walkDirs(inputDir, cfg)
+	convert(&metadata, tables)
 	return &metadata
 }
 
