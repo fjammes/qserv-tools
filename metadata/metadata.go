@@ -307,7 +307,7 @@ func Cmd(inputDir string, outFile string, cfg Config) {
 
 	log.Info().Str("Path", outFile).Msg("Generate JSON file")
 
-	f, err := os.OpenFile(outFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	f, err := os.Create(outFile)
 	if err != nil {
 		panic(err)
 	}

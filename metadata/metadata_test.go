@@ -114,6 +114,18 @@ func TestConvert(t *testing.T) {
 		Files:    nil,
 	}
 
+	dataList["chunkdatadir10"] = data{
+		Chunks:   []int{11111, 22222, 33333, 44444},
+		Overlaps: []int{11111, 22222, 33333},
+		Files:    nil,
+	}
+
+	dataList["chunkdatadir20"] = data{
+		Chunks:   []int{11111, 22222, 33333, 44444},
+		Overlaps: []int(nil),
+		Files:    nil,
+	}
+
 	tables["RubinTable"] = table{
 		Schema:   "RubinTable.json",
 		Indexes:  []string(nil),
@@ -126,7 +138,9 @@ func TestConvert(t *testing.T) {
 
 	assert.Equal(t, []int(nil), metadata.Tables[0].DataList["chunkdatadir"].Overlaps, "Overlap should be empty")
 
-	dataList["chunkdatadir2"] = data{
+	assert.Equal(t, []int{11111, 22222, 33333}, metadata.Tables[0].DataList["chunkdatadir10"].Overlaps, "Overlap should be equals")
+
+	dataList["chunkdatadir100"] = data{
 		Chunks:   []int(nil),
 		Overlaps: []int(nil),
 		Files:    []string{"data.csv"},
