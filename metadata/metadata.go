@@ -30,14 +30,15 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type Filetype int64
@@ -51,14 +52,21 @@ const (
 	Unknown
 )
 
+type Config struct {
+	DbJsonFile    string
+	OrderedTables []string
+	IdxDir        string
+}
+
 type metadata struct {
 	Database string `json:"database"`
 	// map key is the schema file
-	Tables map[string]table `json:"tables"`
+	Tables []table `json:"tables"`
 }
 
 type table struct {
-	Indexes []string `json:"indexes"`
+	Schema  string   `json:"schema"`
+	Indexes []string `json:"indexes,omitempty"`
 	// map key is the directory
 	DataList map[string]data `json:"data"`
 }
@@ -75,16 +83,119 @@ func check(e error) {
 	}
 }
 
-func newMetadata() *metadata {
-	var metadata metadata
-	metadata.Tables = make(map[string]table)
-	return &metadata
+func logTable(tables map[string]table) {
+	for k, v := range tables {
+		log.Debug().Str("key", k).Str("value", fmt.Sprintf("Table %v", v)).Msg("")
+	}
 }
 
-func newTable() *table {
-	var table table
-	table.DataList = make(map[string]data)
-	return &table
+func walkDirs(inputDir string, cfg Config) map[string]table {
+	// Ensure inputDir has only one trailing slash
+	for inputDir[len(inputDir)-1] == '/' {
+		inputDir = strings.TrimSuffix(inputDir, "/")
+	}
+	inputDir += "/"
+
+	tables := make(map[string]table)
+
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	visitData := func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			rpath := strings.TrimPrefix(path, inputDir)
+			dir, filename := filepath.Split(rpath)
+
+			parts := strings.SplitN(dir, "/", 2)
+			tablename := parts[0]
+
+			log.Debug().Str("CWD", dir).Msg("")
+			log.Debug().Str("File", filename).Msg("")
+			log.Debug().Str("Table", tablename).Msg("")
+
+			ftype, chunkId, err := filetype(filename)
+			if err != nil {
+				return err
+			}
+			if ftype == Unknown {
+				err = fmt.Errorf("Not recognized file %s", path)
+				return err
+			}
+			if isDataFile(ftype) {
+				err = appendMetadata(tables, tablename, dir, filename, ftype, chunkId)
+				if err != nil {
+					return err
+				}
+			}
+
+		}
+		return nil
+	}
+	err := filepath.WalkDir(inputDir, visitData)
+	if err != nil {
+		log.Fatal().AnErr("WalkDir", err).Msg("Error while scanning path")
+	}
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	visitIdx := func(path string, info fs.DirEntry, err error) error {
+
+		if err != nil {
+			return err
+		}
+		found := false
+		// log.Printf("file %s", path)
+		if !info.IsDir() {
+			_, filename := filepath.Split(path)
+
+			log.Debug().Str("IndexFile", filename).Msg("")
+
+			ftype, _, err := filetype(filename)
+			if err != nil {
+				return err
+			}
+			if ftype == Json {
+				for tablename, tableSpec := range tables {
+					log.Debug().Str("TableName", tablename).Str("TableSpec", fmt.Sprintf("%v", tableSpec)).Msg("")
+					re := regexp.MustCompile(fmt.Sprintf("^idx_%s.*\\.json$", tablename))
+					if re.MatchString(filename) {
+						log.Debug().Str("IndexFile", filename).Str("Regexp", re.String()).Msg("Recognized index file")
+						tableSpec.Indexes = append(tableSpec.Indexes, filename)
+						tables[tablename] = tableSpec
+						found = true
+						break
+					}
+				}
+				if !found {
+					return fmt.Errorf("Unable to find a table for index file %s", path)
+				}
+
+			} else {
+				return fmt.Errorf("Unable to recognize format for file %s", path)
+			}
+
+		}
+		return nil
+	}
+
+	err = filepath.WalkDir(cfg.IdxDir, visitIdx)
+	if err != nil {
+		log.Fatal().AnErr("WalkDir", err).Msg("Error while scanning path")
+	}
+	return tables
+}
+
+func newMetadata(inputDir string, cfg Config) *metadata {
+	var metadata metadata
+	metadata.Database = cfg.DbJsonFile
+
+	tables := walkDirs(inputDir, cfg)
+
+	metadata.Tables = make([]table, 0, len(tables))
+	for _, value := range tables {
+		metadata.Tables = append(metadata.Tables, value)
+	}
+
+	return &metadata
 }
 
 func isDataFile(category Filetype) bool {
@@ -97,10 +208,6 @@ func isDataFile(category Filetype) bool {
 		return true
 	}
 	return false
-}
-
-func update(data *data, filename string) {
-	data.Files = append(data.Files, filename)
 }
 
 func filetype(filename string) (Filetype, int, error) {
@@ -125,27 +232,27 @@ func filetype(filename string) (Filetype, int, error) {
 	case filepath.Ext(filename) == ".tsv":
 		ftype = Tsv
 	default:
-		log.Println("not recognized")
+		log.Warn().Msg("not recognized")
 		ftype = Unknown
 
 	}
 	return ftype, chunkId, err
 }
 
-func appendMetadata(metadata *metadata, table string, directory string, filename string, filetype Filetype, chunkId int) error {
+func appendMetadata(tables map[string]table, table string, directory string, filename string, filetype Filetype, chunkId int) error {
 
 	var err error
-	t := metadata.Tables[table]
+	t := tables[table]
+
+	if len(t.Schema) == 0 {
+		t.Schema = fmt.Sprintf("%s.json", table)
+	}
 
 	if t.DataList == nil {
 		t.DataList = make(map[string]data)
 	}
 
 	d := t.DataList[directory]
-
-	if len(d.Files) == 0 {
-		d.Files = make([]string, 0, 20)
-	}
 
 	switch filetype {
 	case Chunk:
@@ -157,63 +264,31 @@ func appendMetadata(metadata *metadata, table string, directory string, filename
 	case Tsv:
 		d.Files = append(d.Files, filename)
 	default:
-		log.Println("not recognized")
-		err = fmt.Errorf("Not recognized file %s", filepath.Join(directory, filename))
+		msg := fmt.Sprintf("Not recognized file %s", filepath.Join(directory, filename))
+		log.Warn().Msg(msg)
+		err = fmt.Errorf(msg)
 	}
 
 	t.DataList[directory] = d
-	metadata.Tables[table] = t
+	tables[table] = t
 
 	t.DataList[directory] = d
-	metadata.Tables[table] = t
+	tables[table] = t
 	return err
 }
 
-func Cmd(inputDir string) {
+func Cmd(inputDir string, outFile string, cfg Config) {
 
-	metadata := newMetadata()
+	log.Info().Str("Path", inputDir).Msg("Start directory analyze")
 
-	visit := func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		// log.Printf("file %s", path)
-		if !info.IsDir() {
-			rpath := strings.TrimPrefix(path, inputDir)
-			dir, filename := filepath.Split(rpath)
-			parts := strings.SplitN(dir, "/", 2)
+	metadata := newMetadata(inputDir, cfg)
 
-			tablejson := parts[0]
-
-			// fmt.Println("Dir:", dir)       //Dir: /some/path/to/remove/
-			// fmt.Println("File:", filename) //File: file.name
-			// fmt.Println("Table:", tablejson)
-
-			ftype, chunkId, err := filetype(filename)
-			if err != nil {
-				return err
-			}
-			if ftype == Unknown {
-				err = fmt.Errorf("Not recognized file %s", filepath.Join(dir, filename))
-				return err
-			}
-			if isDataFile(ftype) {
-				err = appendMetadata(metadata, tablejson, dir, filename, ftype, chunkId)
-				if err != nil {
-					return err
-				}
-			}
-
-		}
-		return nil
-	}
-
-	err := filepath.WalkDir(inputDir, visit)
+	f, err := os.OpenFile(outFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
+	defer f.Close()
 
-	var f io.Writer = os.Stdout
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	err = enc.Encode(metadata)

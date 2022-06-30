@@ -28,7 +28,12 @@
 package metadata
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
+
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
 )
 
 // Testfiletype check return values for metadata.filetype()
@@ -52,4 +57,47 @@ func TestFiletype(t *testing.T) {
 	if res != Json || err != nil {
 		t.Fatalf("Unrecognized file %s, res %d, err %v", filename, res, err)
 	}
+}
+
+// TestAppendMetadata check return values for metadata.appendMetadata()
+func TestAppendMetadata(t *testing.T) {
+	tables := make(map[string]table)
+	_ = appendMetadata(tables, "RubinTable", "chunkdatadir", "chunk_61271.txt", Chunk, 61271)
+
+	expectedTables := make(map[string]table)
+	dataList := make(map[string]data)
+
+	dataList["chunkdatadir"] = data{
+		Chunks:   []int{61271},
+		Overlaps: nil,
+		Files:    nil,
+	}
+
+	expectedTables["RubinTable"] = table{
+		Schema:   "RubinTable.json",
+		Indexes:  []string(nil),
+		DataList: dataList,
+	}
+	assert.Equal(t, expectedTables, tables, "The two table maps should be the same.")
+}
+
+// TestWalkDirs check return values for metadata.walkDirs()
+func TestWalkDirs(t *testing.T) {
+
+	_, filename, _, _ := runtime.Caller(0)
+	srcDir := filepath.Dir(filepath.Dir(filename))
+	testDir := filepath.Join(srcDir, "itest", "case01")
+	log.Debug().Msgf("Test data directory %s", testDir)
+	cfg := Config{
+		DbJsonFile:    "database.json",
+		OrderedTables: []string{},
+		IdxDir:        filepath.Join(testDir, "idx"),
+	}
+	tables := walkDirs(testDir, cfg)
+	log.Debug().Msgf("RefSrcMatch indexes %v", tables["RefSrcMatch"].Indexes)
+	idx := []string{"idx_RefSrcMatchRandomXXX.json", "idx_RefSrcMatch_RandomYYY.json"}
+	assert.Equal(t, idx, tables["RefSrcMatch"].Indexes, "The two index lists should be the same.")
+	idx = []string{"idx_sdqa_Metric_id.json"}
+	assert.Equal(t, idx, tables["sdqa_Metric"].Indexes, "The two index lists should be the same.")
+	assert.Equal(t, []string(nil), tables["LeapSeconds"].Indexes, "The two index lists should be the same.")
 }
