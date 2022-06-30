@@ -37,8 +37,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/slices"
 )
 
 type Filetype int64
@@ -95,7 +95,8 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 
 	tables := make(map[string]table)
 
-	zerolog.SetGlobalLevel(zerolog.Disabled)
+	// zerolog.SetGlobalLevel(zerolog.Disabled)
+	log.Info().Str("inputDir", cfg.IdxDir).Msg("Add data files")
 	visitData := func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -135,6 +136,8 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 		log.Fatal().AnErr("WalkDir", err).Msg("Error while scanning path")
 	}
 	// zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
+	log.Info().Str("Path", cfg.IdxDir).Msg("Add index files")
 	visitIdx := func(path string, info fs.DirEntry, err error) error {
 
 		if err != nil {
@@ -189,8 +192,27 @@ func newMetadata(inputDir string, cfg Config) *metadata {
 	tables := walkDirs(inputDir, cfg)
 
 	metadata.Tables = make([]table, 0, len(tables))
-	for _, value := range tables {
-		metadata.Tables = append(metadata.Tables, value)
+	for tableName, tableSpec := range tables {
+		var is_partitioned, is_regular bool
+		for dir, dataSpec := range tableSpec.DataList {
+			// TODO Check a table does not have both chunk/overlap and files
+			if len(dataSpec.Chunks) != 0 || len(dataSpec.Overlaps) != 0 {
+				is_partitioned = true
+			}
+			if len(dataSpec.Files) != 0 {
+				is_regular = true
+			}
+			// Remove Overlap list if equals Chunk list
+			if len(dataSpec.Chunks) != 0 && slices.Equal(dataSpec.Chunks, dataSpec.Overlaps) {
+				dataSpec.Overlaps = []int(nil)
+			}
+			tableSpec.DataList[dir] = dataSpec
+		}
+		if is_partitioned == is_regular {
+			log.Fatal().Str("Partitioned", strconv.FormatBool(is_partitioned)).Str("Regular", strconv.FormatBool(is_regular)).Str("Table", tableName).Msg("Error while checking data consistency")
+		}
+
+		metadata.Tables = append(metadata.Tables, tableSpec)
 	}
 
 	return &metadata
@@ -277,16 +299,17 @@ func appendMetadata(tables map[string]table, table string, directory string, fil
 
 func Cmd(inputDir string, outFile string, cfg Config) {
 
-	log.Info().Str("Path", inputDir).Msg("Start directory analyze")
+	log.Info().Str("Path", inputDir).Msg("Analyze data directory")
 
 	metadata := newMetadata(inputDir, cfg)
+
+	log.Info().Str("Path", outFile).Msg("Generate JSON file")
 
 	f, err := os.OpenFile(outFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
-
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	err = enc.Encode(metadata)
