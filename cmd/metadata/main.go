@@ -30,7 +30,7 @@ package main
 import (
 	"flag"
 
-	"github.com/fjammes/qserv_tools/v2/metadata"
+	"github.com/fjammes/qserv-tools/v2/metadata"
 
 	"github.com/rs/zerolog"
 )

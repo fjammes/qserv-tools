@@ -1,5 +1,5 @@
-package qserv_tool
+package qserv-tools
 
 func Config() string {
-	return "qserv_tool config"
+	return "qserv-tools config"
 }
