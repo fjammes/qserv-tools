@@ -1,4 +1,4 @@
-module fjammes/qserv_tools/v2
+module github.com/fjammes/qserv_tools/v2
 
 go 1.18
 
