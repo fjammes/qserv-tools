@@ -1,4 +1,4 @@
-package qserv-tools
+package qservtools
 
 func Config() string {
 	return "qserv-tools config"

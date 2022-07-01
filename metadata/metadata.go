@@ -43,6 +43,14 @@ import (
 
 type Filetype int64
 
+// Store a map of data for each table
+type TableMap map[string]DataSpec
+
+type DataSpec struct {
+	Indexes []string
+	DataMap map[string]data
+}
+
 const (
 	Csv Filetype = iota
 	Chunk
@@ -67,14 +75,14 @@ type metadata struct {
 type table struct {
 	Schema  string   `json:"schema"`
 	Indexes []string `json:"indexes,omitempty"`
-	// map key is the directory
-	DataList map[string]data `json:"data"`
+	Data    []data   `json:"data"`
 }
 
 type data struct {
-	Chunks   []int    `json:"chunks,omitempty"`
-	Overlaps []int    `json:"overlaps,omitempty"`
-	Files    []string `json:"files,omitempty"`
+	Directory string   `json:"directory,omitempty"`
+	Chunks    []int    `json:"chunks,omitempty"`
+	Overlaps  []int    `json:"overlaps,omitempty"`
+	Files     []string `json:"files,omitempty"`
 }
 
 func check(e error) {
@@ -89,11 +97,11 @@ func logTable(tables map[string]table) {
 	}
 }
 
-func walkDirs(inputDir string, cfg Config) map[string]table {
+func walkDirs(inputDir string, cfg Config) TableMap {
 	// Ensure inputDir has no trailing slash
 	inputDir = filepath.Join(inputDir)
 
-	tables := make(map[string]table)
+	var tables TableMap = make(map[string]DataSpec)
 
 	// zerolog.SetGlobalLevel(zerolog.Disabled)
 	log.Info().Str("Path", inputDir).Msg("Add data files")
@@ -185,38 +193,55 @@ func walkDirs(inputDir string, cfg Config) map[string]table {
 	return tables
 }
 
-func convert(metadata *metadata, tables map[string]table) {
+func convert(tables TableMap) metadata {
+	metadata := metadata{}
 	metadata.Tables = make([]table, 0, len(tables))
-	for tableName, tableSpec := range tables {
+	for tableName, dataSpec := range tables {
 		var is_partitioned, is_regular bool
-		for dir, dataSpec := range tableSpec.DataList {
+		for dir, data := range dataSpec.DataMap {
 			// TODO Check a table does not have both chunk/overlap and files
-			if len(dataSpec.Chunks) != 0 || len(dataSpec.Overlaps) != 0 {
+			if len(data.Chunks) != 0 || len(data.Overlaps) != 0 {
 				is_partitioned = true
 			}
-			if len(dataSpec.Files) != 0 {
+			if len(data.Files) != 0 {
 				is_regular = true
 			}
 			// Remove Overlap list if equals Chunk list
-			if len(dataSpec.Chunks) != 0 && slices.Equal(dataSpec.Chunks, dataSpec.Overlaps) {
+			if len(data.Chunks) != 0 && slices.Equal(data.Chunks, data.Overlaps) {
 				log.Info().Str("Table", tableName).Str("Path", dir).Msg("Remove Overlaps")
-				dataSpec.Overlaps = []int(nil)
+				data.Overlaps = []int(nil)
 			}
-			tableSpec.DataList[dir] = dataSpec
+			dataSpec.DataMap[dir] = data
 		}
 		if is_partitioned == is_regular {
 			log.Fatal().Str("Partitioned", strconv.FormatBool(is_partitioned)).Str("Regular", strconv.FormatBool(is_regular)).Str("Table", tableName).Msg("Error while checking data consistency")
 		}
-		metadata.Tables = append(metadata.Tables, tableSpec)
+		dataList := make([]data, 0, len(dataSpec.DataMap))
+		for _, data := range dataSpec.DataMap {
+			dataList = append(dataList, data)
+		}
+		table := table{
+			Schema:  fmt.Sprintf("%s.json", tableName),
+			Indexes: dataSpec.Indexes,
+			Data:    dataList,
+		}
+		metadata.Tables = append(metadata.Tables, table)
+
 	}
+	return metadata
+}
+
+func newDataSpec() *DataSpec {
+	var dataspec DataSpec
+	dataspec.DataMap = make(map[string]data)
+
+	return &dataspec
 }
 
 func newMetadata(inputDir string, cfg Config) *metadata {
-	var metadata metadata
-	metadata.Database = cfg.DbJsonFile
-
 	tables := walkDirs(inputDir, cfg)
-	convert(&metadata, tables)
+	metadata := convert(tables)
+	metadata.Database = cfg.DbJsonFile
 	return &metadata
 }
 
@@ -261,20 +286,21 @@ func filetype(filename string) (Filetype, int, error) {
 	return ftype, chunkId, err
 }
 
-func appendMetadata(tables map[string]table, table string, directory string, filename string, filetype Filetype, chunkId int) error {
+func appendMetadata(tables TableMap, table string, directory string, filename string, filetype Filetype, chunkId int) error {
 
 	var err error
 	t := tables[table]
 
-	if len(t.Schema) == 0 {
-		t.Schema = fmt.Sprintf("%s.json", table)
+	t, ok := tables[table]
+	if !ok {
+		t = *newDataSpec()
 	}
 
-	if t.DataList == nil {
-		t.DataList = make(map[string]data)
-	}
+	d := t.DataMap[directory]
 
-	d := t.DataList[directory]
+	if len(d.Directory) == 0 {
+		d.Directory = directory
+	}
 
 	switch filetype {
 	case Chunk:
@@ -291,11 +317,9 @@ func appendMetadata(tables map[string]table, table string, directory string, fil
 		err = fmt.Errorf(msg)
 	}
 
-	t.DataList[directory] = d
+	t.DataMap[directory] = d
 	tables[table] = t
 
-	t.DataList[directory] = d
-	tables[table] = t
 	return err
 }
 

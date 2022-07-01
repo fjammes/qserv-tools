@@ -61,22 +61,18 @@ func TestFiletype(t *testing.T) {
 
 // TestAppendMetadata check return values for metadata.appendMetadata()
 func TestAppendMetadata(t *testing.T) {
-	tables := make(map[string]table)
+	var tables TableMap = make(map[string]DataSpec)
 	_ = appendMetadata(tables, "RubinTable", "chunkdatadir", "chunk_61271.txt", Chunk, 61271)
 
-	expectedTables := make(map[string]table)
-	dataList := make(map[string]data)
+	var expectedTables TableMap = make(map[string]DataSpec)
 
-	dataList["chunkdatadir"] = data{
-		Chunks:   []int{61271},
-		Overlaps: nil,
-		Files:    nil,
-	}
+	expectedTables["RubinTable"] = *newDataSpec()
 
-	expectedTables["RubinTable"] = table{
-		Schema:   "RubinTable.json",
-		Indexes:  []string(nil),
-		DataList: dataList,
+	expectedTables["RubinTable"].DataMap["chunkdatadir"] = data{
+		Directory: "chunkdatadir",
+		Chunks:    []int{61271},
+		Overlaps:  nil,
+		Files:     nil,
 	}
 	assert.Equal(t, expectedTables, tables, "The two table maps should be the same.")
 }
@@ -105,7 +101,7 @@ func TestWalkDirs(t *testing.T) {
 // TestWalkDirs check return values for metadata.convert()
 func TestConvert(t *testing.T) {
 
-	tables := make(map[string]table)
+	var tables TableMap = make(map[string]DataSpec)
 	dataList := make(map[string]data)
 
 	dataList["chunkdatadir"] = data{
@@ -126,19 +122,16 @@ func TestConvert(t *testing.T) {
 		Files:    nil,
 	}
 
-	tables["RubinTable"] = table{
-		Schema:   "RubinTable.json",
-		Indexes:  []string(nil),
-		DataList: dataList,
+	tables["RubinTable"] = DataSpec{
+		Indexes: []string(nil),
+		DataMap: dataList,
 	}
 
-	var metadata metadata
+	metadata := convert(tables)
 
-	convert(&metadata, tables)
+	assert.Equal(t, []int(nil), metadata.Tables[0].Data[0].Overlaps, "Overlap should be empty")
 
-	assert.Equal(t, []int(nil), metadata.Tables[0].DataList["chunkdatadir"].Overlaps, "Overlap should be empty")
-
-	assert.Equal(t, []int{11111, 22222, 33333}, metadata.Tables[0].DataList["chunkdatadir10"].Overlaps, "Overlap should be equals")
+	assert.Equal(t, []int{11111, 22222, 33333}, metadata.Tables[0].Data[1].Overlaps, "Overlap should be equals")
 
 	dataList["chunkdatadir100"] = data{
 		Chunks:   []int(nil),
