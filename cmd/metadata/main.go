@@ -29,6 +29,7 @@ package main
 
 import (
 	"flag"
+	"strings"
 
 	"github.com/fjammes/qserv-tools/v2/metadata"
 
@@ -42,9 +43,11 @@ func main() {
 	defaultInputDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905"
 	defaultIdxDir := "/sps/lsst/groups/qserv/dataloader/stable/idf-dp0.2-catalog-chunked/PREOPS-905/in2p3/config_indexes"
 	defaultOutputFile := "/tmp/metadata.json"
+	defaultOrderedTables := "Object Source DiaObject DiaSource CcdVisit ForcedSource ForcedSourceOnDiaObject MatchesTruth Visit"
 	inputDir := flag.String("path", defaultInputDir, "Path to input data")
 	outFile := flag.String("out", defaultOutputFile, "Path to output file")
 	idxDir := flag.String("idx", defaultIdxDir, "Path to indexes configuration files")
+	orderedTablesStr := flag.String("o", defaultOrderedTables, "Ingest order for tables")
 	flag.Parse()
 
 	// Default level for this example is info, unless debug flag is present
@@ -55,7 +58,7 @@ func main() {
 
 	cfg := metadata.Config{
 		DbJsonFile:    "dp02_dc2_catalogs.json",
-		OrderedTables: []string{"Object", "Source", "DiaObject", "DiaSource", "CcdVisit", "ForcedSource", "ForcedSourceOnDiaObject", "MatchesTruth", "Visit"},
+		OrderedTables: strings.Fields(*orderedTablesStr),
 		IdxDir:        *idxDir,
 	}
 
