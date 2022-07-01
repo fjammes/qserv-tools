@@ -28,8 +28,9 @@
 package main
 
 import (
-	"fjammes/qserv_tools/v2/metadata"
 	"flag"
+
+	"github.com/fjammes/qserv_tools/v2/metadata"
 
 	"github.com/rs/zerolog"
 )

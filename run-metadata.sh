@@ -5,7 +5,7 @@ set -euxo pipefail
 DIR=$(cd "$(dirname "$0")"; pwd -P)
 
 cd $DIR/cmd/metadata
-go build metadata.go
+go build -o metadata main.go
 scp "$DIR"/metadata cc:/pbs/home/f/fjammes
 ssh cc "killall /pbs/home/f/fjammes/metadata" || true
 ssh cc "time /pbs/home/f/fjammes/metadata"
