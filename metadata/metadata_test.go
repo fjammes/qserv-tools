@@ -89,7 +89,7 @@ func TestWalkDirs(t *testing.T) {
 		OrderedTables: []string{},
 		IdxDir:        filepath.Join(testDir, "idx"),
 	}
-	tables := walkDirs(testDir, cfg)
+	tables := walkDirs(testDir, cfg.IdxDir)
 	log.Debug().Msgf("RefSrcMatch indexes %v", tables["RefSrcMatch"].Indexes)
 	idx := []string{"idx_RefSrcMatchRandomXXX.json", "idx_RefSrcMatch_RandomYYY.json"}
 	assert.Equal(t, idx, tables["RefSrcMatch"].Indexes, "The two index lists should be the same.")
@@ -127,11 +127,21 @@ func TestConvert(t *testing.T) {
 		DataMap: dataList,
 	}
 
-	metadata := convert(tables)
+	tables["RubinTable1"] = DataSpec{
+		Indexes: []string(nil),
+		DataMap: nil,
+	}
 
-	assert.Equal(t, []int(nil), metadata.Tables[0].Data[0].Overlaps, "Overlap should be empty")
+	tables["RubinTable2"] = DataSpec{
+		Indexes: []string(nil),
+		DataMap: nil,
+	}
 
-	assert.Equal(t, []int{11111, 22222, 33333}, metadata.Tables[0].Data[1].Overlaps, "Overlap should be equals")
+	metadata := convert(tables, []string{"RubinTable2", "RubinTable1", "RubinTable"})
+
+	assert.Equal(t, []int(nil), metadata.Tables[2].Data[0].Overlaps, "Overlap should be empty")
+
+	assert.Equal(t, []int{11111, 22222, 33333}, metadata.Tables[2].Data[1].Overlaps, "Overlap should be equals")
 
 	dataList["chunkdatadir100"] = data{
 		Chunks:   []int(nil),

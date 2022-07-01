@@ -55,7 +55,7 @@ func main() {
 
 	cfg := metadata.Config{
 		DbJsonFile:    "dp02_dc2_catalogs.json",
-		OrderedTables: []string{},
+		OrderedTables: []string{"Object", "Source", "DiaObject", "DiaSource", "CcdVisit", "ForcedSource", "ForcedSourceOnDiaObject", "MatchesTruth", "Visit"},
 		IdxDir:        *idxDir,
 	}
 

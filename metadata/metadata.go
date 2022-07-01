@@ -33,7 +33,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -97,7 +99,7 @@ func logTable(tables map[string]table) {
 	}
 }
 
-func walkDirs(inputDir string, cfg Config) TableMap {
+func walkDirs(inputDir string, idxDir string) TableMap {
 	// Ensure inputDir has no trailing slash
 	inputDir = filepath.Join(inputDir)
 
@@ -145,7 +147,7 @@ func walkDirs(inputDir string, cfg Config) TableMap {
 	}
 	// zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
-	log.Info().Str("Path", cfg.IdxDir).Msg("Add index files")
+	log.Info().Str("Path", idxDir).Msg("Add index files")
 	visitIdx := func(path string, info fs.DirEntry, err error) error {
 
 		if err != nil {
@@ -186,17 +188,38 @@ func walkDirs(inputDir string, cfg Config) TableMap {
 		return nil
 	}
 
-	err = filepath.WalkDir(cfg.IdxDir, visitIdx)
+	err = filepath.WalkDir(idxDir, visitIdx)
 	if err != nil {
 		log.Fatal().AnErr("WalkDir", err).Msg("Error while scanning path")
 	}
 	return tables
 }
 
-func convert(tables TableMap) metadata {
+func convert(tables TableMap, orderedTables []string) metadata {
 	metadata := metadata{}
 	metadata.Tables = make([]table, 0, len(tables))
-	for tableName, dataSpec := range tables {
+
+	dataTableNames := make([]string, 0, len(tables))
+	for k := range tables {
+		dataTableNames = append(dataTableNames, k)
+	}
+
+	if len(orderedTables) == 0 {
+		orderedTables = dataTableNames
+	} else {
+		sortedOrderedTables := make([]string, len(orderedTables))
+		sortedDataTableNames := make([]string, len(dataTableNames))
+		copy(sortedOrderedTables, orderedTables)
+		copy(sortedDataTableNames, dataTableNames)
+		sort.Strings(sortedOrderedTables)
+		sort.Strings(sortedDataTableNames)
+		if !reflect.DeepEqual(sortedOrderedTables, sortedDataTableNames) {
+			log.Fatal().Str("Ordered tables", fmt.Sprintf("%v", orderedTables)).Str("Data tables", fmt.Sprintf("%v", dataTableNames)).Msg("Error: tables provided by configuration differ from found tables")
+		}
+	}
+
+	for _, tableName := range orderedTables {
+		dataSpec := tables[tableName]
 		var is_partitioned, is_regular bool
 		for dir, data := range dataSpec.DataMap {
 			// TODO Check a table does not have both chunk/overlap and files
@@ -213,8 +236,10 @@ func convert(tables TableMap) metadata {
 			}
 			dataSpec.DataMap[dir] = data
 		}
-		if is_partitioned == is_regular {
+		if is_partitioned && is_regular {
 			log.Fatal().Str("Partitioned", strconv.FormatBool(is_partitioned)).Str("Regular", strconv.FormatBool(is_regular)).Str("Table", tableName).Msg("Error while checking data consistency")
+		} else if !is_partitioned && !is_regular {
+			log.Warn().Str("Partitioned", strconv.FormatBool(is_partitioned)).Str("Regular", strconv.FormatBool(is_regular)).Str("Table", tableName).Msg("Table has no data")
 		}
 		dataList := make([]data, 0, len(dataSpec.DataMap))
 		for _, data := range dataSpec.DataMap {
@@ -226,7 +251,6 @@ func convert(tables TableMap) metadata {
 			Data:    dataList,
 		}
 		metadata.Tables = append(metadata.Tables, table)
-
 	}
 	return metadata
 }
@@ -239,8 +263,8 @@ func newDataSpec() *DataSpec {
 }
 
 func newMetadata(inputDir string, cfg Config) *metadata {
-	tables := walkDirs(inputDir, cfg)
-	metadata := convert(tables)
+	tables := walkDirs(inputDir, cfg.IdxDir)
+	metadata := convert(tables, cfg.OrderedTables)
 	metadata.Database = cfg.DbJsonFile
 	return &metadata
 }
