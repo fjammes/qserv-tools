@@ -30,6 +30,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -131,15 +132,17 @@ func main() {
 
 	var sqlFiles []fs.FileInfo
 
-	qserv_src_path := "/home/fjammes/src/qserv/"
-	caseId := "case01"
+	qserv_src_path := flag.String("qserv_src_path", "/home/fjammes/src/qserv/", "Path to Qserv source code")
+	case_id := flag.String("case_id", "case01", "Test case to extract")
+	dbbench_conf := flag.String("dbbench_conf", "/tmp/dbbench.ini", "Path to dbbench output file")
+	flag.Parse()
 
-	query_path := filepath.Join(qserv_src_path, "itest_src", "datasets", caseId, "queries")
+	query_path := filepath.Join(*qserv_src_path, "itest_src", "datasets", *case_id, "queries")
 
 	log.Printf("Use input queries  path %v", query_path)
 
-	conf_file := filepath.Join(qserv_src_path, "src", "admin", "etc", "integration_tests.yaml")
-	skippedQueryIds, err := getSkippedQueries(conf_file, caseId)
+	conf_file := filepath.Join(*qserv_src_path, "src", "admin", "etc", "integration_tests.yaml")
+	skippedQueryIds, err := getSkippedQueries(conf_file, *case_id)
 	check(err)
 
 	files, err := ioutil.ReadDir(query_path)
@@ -159,9 +162,8 @@ func main() {
 		}
 	}
 
-	dbbench_conf := "/tmp/dbbench.ini"
 	log.Printf("Generate %v", dbbench_conf)
-	f, err := os.Create(dbbench_conf)
+	f, err := os.Create(*dbbench_conf)
 	check(err)
 
 	defer f.Close()
