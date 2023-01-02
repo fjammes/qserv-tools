@@ -40,6 +40,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ohler55/ojg/jp"
+	"github.com/ohler55/ojg/oj"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,7 +81,7 @@ func (t *SkippedQueries) descend(node *yaml.Node) error {
 				break
 			}
 		}
-		if found == true {
+		if found {
 			for i := 0; i < len(node.Content); i += 2 {
 				key := node.Content[i]
 				value := node.Content[i+1]
@@ -128,6 +130,35 @@ func getSkippedQueries(filename string, caseId string) ([]string, error) {
 	return t.QueryIds, nil
 }
 
+func generateCountQueries(filename string) (string, error) {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("in file %q: %v", filename, err)
+	}
+
+	json_str := string(b) // convert content to a 'string'
+
+	obj, err := oj.ParseString(json_str)
+	if err != nil {
+		return "", fmt.Errorf("in json %q, %v", json_str, err)
+	}
+
+	jsonpath := ".tables.*.schema"
+	x, err := jp.ParseString(jsonpath)
+	if err != nil {
+		return "", fmt.Errorf("in jsonpath %q, %v", jsonpath, err)
+	}
+	ys := x.Get(obj)
+	out := ""
+	for _, v := range ys {
+		table := strings.TrimSuffix(fmt.Sprint(v), ".json")
+		query := fmt.Sprintf("[count%s]\nquery=SELECT count(*) FROM %s\n"+
+			"query-results-file=/tmp/dbbench/count%s.csv\ncount=1\n\n", table, table, table)
+		out = out + query
+	}
+	return out, nil
+}
+
 func main() {
 
 	var sqlFiles []fs.FileInfo
@@ -138,6 +169,7 @@ func main() {
 	flag.Parse()
 
 	query_path := filepath.Join(*qserv_src_path, "itest_src", "datasets", *case_id, "queries")
+	metadata_path := filepath.Join(*qserv_src_path, "itest_src", "datasets", *case_id, "data", "ingest", "metadata.json")
 
 	log.Printf("Use input queries  path %v", query_path)
 
@@ -162,13 +194,16 @@ func main() {
 		}
 	}
 
-	log.Printf("Generate %v", dbbench_conf)
+	log.Printf("Generate %s", *dbbench_conf)
 	f, err := os.Create(*dbbench_conf)
 	check(err)
 
 	defer f.Close()
 	w := bufio.NewWriter(f)
 	i := 0
+	countQueries, err := generateCountQueries(metadata_path)
+	check(err)
+	w.WriteString(countQueries)
 	for _, file := range sqlFiles {
 
 		id := fmt.Sprintf("[%d]\n", i)
