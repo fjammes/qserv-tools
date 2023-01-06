@@ -20,10 +20,7 @@
 * see <http://www.lsstcorp.org/LegalNotices/>.
  */
 
-// Generate dbbench.ini file from Qserv integration tests's datasets
-// See qserv/itest_src/datasets/case<ID>/queries
-// Exemple to run it:
-// go run itest/examples/dbbench.go && cat /tmp/dbbench.ini
+// Generate metadata.json file from a list a chunk contribution files
 
 package metadata
 
